@@ -19,6 +19,10 @@ namespace MonitorSwitcher.WinApi
 
         [DllImport("dxva2.dll", ExactSpelling = true, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetNumberOfPhysicalMonitorsFromHMONITOR(IntPtr hMonitor, ref int numberOfPhysicalMonitors);
+
+        [DllImport("dxva2.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool DestroyPhysicalMonitors(
             uint dwPhysicalMonitorArraySize, [Out] PHYSICAL_MONITOR[] pPhysicalMonitorArray);
 

@@ -15,7 +15,7 @@ namespace MonitorSwitcher
     {
         static async Task Watcher()
         {
-            uint GetInputSource(HmonitorWrapper hWrapper)
+            uint GetInputSource(SafeMonitorHandle hWrapper)
             {
                 uint currentValue = 0;
                 uint maximumValue = 0;
@@ -50,7 +50,7 @@ namespace MonitorSwitcher
             {
                 var source = path.sourceInfo.modeInfoIdx < numModeInfoArrayElements ? modeInfoArray[path.sourceInfo.modeInfoIdx].sourceMode : default;
                 var hmon = MonitorFromPoint(source.position, 0);
-                var hwrapper = new HmonitorWrapper(hmon);
+                var hwrapper = new SafeMonitorHandle(hmon);
                 var inpSource = GetInputSource(hwrapper);
                 return new Info(hwrapper, source, inpSource);
             }).ToArray();
@@ -72,11 +72,11 @@ namespace MonitorSwitcher
 
         class Info
         {
-            public HmonitorWrapper Wrapper { get; }
+            public SafeMonitorHandle Wrapper { get; }
             public DisplayConfigSourceMode Source { get; }
             public uint Input { get; set; }
 
-            public Info(HmonitorWrapper wrapper, DisplayConfigSourceMode source, uint input = 0)
+            public Info(SafeMonitorHandle wrapper, DisplayConfigSourceMode source, uint input = 0)
             {
                 Wrapper = wrapper;
                 Source = source;
