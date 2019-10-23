@@ -3,11 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using static MonitorSwitcher.MonitorHelpers;
 using static MonitorSwitcher.DisplayHelpers;
 using static MonitorSwitcher.WinApi.DataTypes;
 using static MonitorSwitcher.WinApi.User32;
-using static MonitorSwitcher.WinApi.Dxva2;
 
 namespace MonitorSwitcher
 {
@@ -15,18 +13,6 @@ namespace MonitorSwitcher
     {
         static async Task Watcher()
         {
-            uint GetInputSource(SafeMonitorHandle hWrapper)
-            {
-                uint currentValue = 0;
-                uint maximumValue = 0;
-                GetVCPFeatureAndVCPFeatureReply(
-                        (IntPtr)hWrapper,
-                        0x60U,  // VCP code for Input Source Select
-                        0U,
-                        ref currentValue,
-                        ref maximumValue);
-                return currentValue;
-            }
             var flags = QueryDisplayFlags.OnlyActivePaths;
 
             var status = GetDisplayConfigBufferSizes(flags, out var numPathArrayElements, out var numModeInfoArrayElements);
@@ -49,10 +35,8 @@ namespace MonitorSwitcher
             var list = pathArray.Select(path =>
             {
                 var source = path.sourceInfo.modeInfoIdx < numModeInfoArrayElements ? modeInfoArray[path.sourceInfo.modeInfoIdx].sourceMode : default;
-                var hmon = MonitorFromPoint(source.position, 0);
-                var hwrapper = new SafeMonitorHandle(hmon);
-                var inpSource = GetInputSource(hwrapper);
-                return new Info(hwrapper, source, inpSource);
+                var monitor = SafePhysicalMonitor.FromPoint(source.position);
+                return new Info(monitor, source, monitor.GetMonitorInputSource());
             }).ToArray();
 
             while (true)
@@ -60,7 +44,7 @@ namespace MonitorSwitcher
                 await Task.Delay(1000);
                 foreach (var item in list)
                 {
-                    var newInput = GetInputSource(item.Wrapper);
+                    var newInput = item.Monitor.GetMonitorInputSource();
                     if (newInput!=item.Input)
                     {
                         Console.WriteLine($"{item.Source.ToPretty()} changed source from {item.Input} to {newInput}");
@@ -72,46 +56,66 @@ namespace MonitorSwitcher
 
         class Info
         {
-            public SafeMonitorHandle Wrapper { get; }
+            public SafePhysicalMonitor Monitor { get; }
             public DisplayConfigSourceMode Source { get; }
             public uint Input { get; set; }
 
-            public Info(SafeMonitorHandle wrapper, DisplayConfigSourceMode source, uint input = 0)
+            public Info(SafePhysicalMonitor monitor, DisplayConfigSourceMode source, uint input = 0)
             {
-                Wrapper = wrapper;
+                Monitor = monitor;
                 Source = source;
                 Input = input;
             }
         }
 
-        static void Main(string[] args)
+        private static int GetDisplayConfig(QueryDisplayFlags flags, out DisplayConfigPathInfo[] pathArray, out DisplayConfigModeInfo[] modeInfoArray)
         {
-            var task = Task.Run(Watcher);
+            pathArray = null;
+            modeInfoArray = null;
 
-            var flags = QueryDisplayFlags.OnlyActivePaths;
-
-            var status = GetDisplayConfigBufferSizes(flags, out var numPathArrayElements, out var numModeInfoArrayElements);
+            var status = GetDisplayConfigBufferSizes(flags, out var numPathElements, out var numModeInfoElements);
             if (status != 0)
             {
                 Console.WriteLine($"GetDisplaConfigBufferSizes FAILED with {status}.");
-                return;
+                return status;
             }
 
-            var pathArray = new DisplayConfigPathInfo[numPathArrayElements];
-            var modeInfoArray = new DisplayConfigModeInfo[numModeInfoArrayElements];
-            var deviceNameArray = new DisplayConfigTargetDeviceName[numModeInfoArrayElements];
+            pathArray = new DisplayConfigPathInfo[numPathElements];
+            modeInfoArray = new DisplayConfigModeInfo[numModeInfoElements];
 
-            status = QueryDisplayConfig(flags, ref numPathArrayElements, pathArray, ref numModeInfoArrayElements, modeInfoArray, IntPtr.Zero);
+            status = QueryDisplayConfig(flags, ref numPathElements, pathArray, ref numModeInfoElements, modeInfoArray, IntPtr.Zero);
             if (status != 0)
             {
                 Console.WriteLine($"QueryDisplayConfig FAILED with {status}");
+                return status;
+            }
+
+            return 0;
+        }
+
+        static void Main(string[] args)
+        {
+            //var task = Task.Run(Watcher);
+            var task = Task.CompletedTask;
+
+            var status = GetDisplayConfig(QueryDisplayFlags.AllPaths, out var pathArray, out var modeInfoArray);
+            if (status != 0)
+            {
                 return;
             }
+
+            var deviceNameArray = new DisplayConfigTargetDeviceName[modeInfoArray.Length];
 
             if (args.Length>0)
             {
                 switch (args[0])
                 {
+                    case "--print":
+                        {
+                            PrintModeInfo(modeInfoArray);
+                        }
+                        break;
+
                     case "--disable" when args.Length == 2 && int.TryParse(args[1], out var id):
                         {
                             var i = Array.FindIndex(pathArray, x => x.flags == 1 && x.targetInfo.id == id);
@@ -122,11 +126,9 @@ namespace MonitorSwitcher
                             else
                             {
                                 pathArray[i].flags = 0;
-                                var res = SetDisplayConfig((uint)pathArray.Length, pathArray, numModeInfoArrayElements, modeInfoArray, SdcFlags.Apply | SdcFlags.UseSuppliedDisplayConfig);
+                                var res = SetDisplayConfig((uint)pathArray.Length, pathArray, (uint)modeInfoArray.Length, modeInfoArray, SdcFlags.Apply | SdcFlags.UseSuppliedDisplayConfig);
                                 Console.WriteLine(res);
                             }
-                            //var paths = pathArray.Take((int)numPathArrayElements).Where(p => p.flags == 1).ToArray();
-                            //paths[paths.Length - 1].flags = 0;
                         }
                         break;
 
@@ -140,18 +142,18 @@ namespace MonitorSwitcher
                     default:
                         Console.WriteLine("invalid syntax");
                         break;
-
                 }
                 return;
             }
 
-            for (int p = 0; p < numPathArrayElements; p++)
+            var p = -1;
+            foreach (var path in pathArray)
             {
-                var path = pathArray[p];
+                p++;
                 if (path.sourceInfo.statusFlags.HasFlag(DisplayConfigSourceStatus.InUse) && path.targetInfo.targetAvailable)
                 {
-                    var source = path.sourceInfo.modeInfoIdx < numModeInfoArrayElements ? modeInfoArray[path.sourceInfo.modeInfoIdx].sourceMode : default;
-                    var target = path.targetInfo.modeInfoIdx < numModeInfoArrayElements ? modeInfoArray[path.targetInfo.modeInfoIdx].targetMode : default;
+                    var source = path.sourceInfo.modeInfoIdx >= 0 ? modeInfoArray[path.sourceInfo.modeInfoIdx].sourceMode : default;
+                    var target = path.targetInfo.modeInfoIdx >= 0 ? modeInfoArray[path.targetInfo.modeInfoIdx].targetMode : default;
 
                     if (target.targetVideoSignalInfo.videoStandard == D3DkmdtVideoSignalStandard.Uninitialized)
                     {
@@ -167,14 +169,14 @@ namespace MonitorSwitcher
                             height = pref.height,
                             width = pref.width
                         };
-                        Console.WriteLine($"  prefTgs: {prefSource.ToPretty()}");
-                        Console.WriteLine($"  prefTgs: {pref.targetMode.ToPretty()}");
+                        Console.WriteLine($"  prefSrc: {prefSource.ToPretty()}");
+                        Console.WriteLine($"  prefTgt: {pref.targetMode.ToPretty()}");
                     }
 
                     DisplayConfigTargetDeviceName monInfo;
                     try
                     {
-                        monInfo = GetMonitorAdditionalInfo(path.targetInfo.adapterId, path.targetInfo.id);
+                        monInfo = GetDeviceName(path.targetInfo.adapterId, path.targetInfo.id);
                         //Console.WriteLine($"additionalInfo: {additionalInfo.monitorFriendlyDevice}");
                     }
                     catch (Exception ex)
@@ -183,22 +185,28 @@ namespace MonitorSwitcher
                         Console.WriteLine($"GetMonitorAdditionalInfo threw {ex.Message}");
                     }
 
-                    var hMon = MonitorFromPoint(source.position, 0);
-                    var inp = GetMonitorInputSource(hMon);
+                    uint inp;
+                    using (var monitor = SafePhysicalMonitor.FromPoint(source.position))
+                    {
+                        inp = monitor.GetMonitorInputSource();
+                    }
 
-                    Console.WriteLine($"{path.targetInfo.id,8} {hMon,12} {monInfo.monitorFriendlyDeviceName ?? "unknown",12} {source.ToPretty(),-30} {path.targetInfo.outputTechnology,-20}/{inp,3} {target.targetVideoSignalInfo.videoStandard} {(path.flags == 1 ? "ACTIVE" : "")}");
+                    Console.WriteLine($"{path.targetInfo.id,8} {monInfo.monitorFriendlyDeviceName ?? "unknown",12} {source.ToPretty(),-30} {path.targetInfo.outputTechnology,-20}/{inp,3} {target.targetVideoSignalInfo.videoStandard} {(path.flags == 1 ? "ACTIVE" : "")}");
 
                 }
             }
 
             task.Wait();
             return;
-            // get the display names for all modes
-            for (var mi = 0; mi < numModeInfoArrayElements; mi++)
+        }
+
+        private static void PrintModeInfo(DisplayConfigModeInfo[] modeInfoArray)
+        {
+            foreach (var modeInfo in modeInfoArray)
             {
-                var modeInfo = modeInfoArray[mi];
+                var mi = modeInfo.id;
                 Console.WriteLine($"modeInfo[{mi}].id: {modeInfo.id}");
-                Console.WriteLine($"modeInfo[{mi}].adapterId: {modeInfo.adapterId}");
+                Console.WriteLine($"modeInfo[{mi}].adapterId: {modeInfo.adapterId.HighPart},{modeInfo.adapterId.LowPart}");
                 //Console.WriteLine($"modeInfo[{mi}].infoType: {modeInfo.infoType}");
                 switch (modeInfo.infoType)
                 {
@@ -215,8 +223,7 @@ namespace MonitorSwitcher
                 {
                     try
                     {
-                        var deviceName = GetMonitorAdditionalInfo(modeInfo.adapterId, modeInfo.id);
-                        deviceNameArray[mi] = deviceName;
+                        var deviceName = GetDeviceName(modeInfo.adapterId, modeInfo.id);
                         Console.WriteLine($"additionalInfo[{mi}]: {deviceName.monitorFriendlyDeviceName}");
                     }
                     catch (Exception ex)

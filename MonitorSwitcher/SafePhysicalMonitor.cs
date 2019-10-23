@@ -1,16 +1,16 @@
 ﻿using System;
 using static MonitorSwitcher.WinApi.DataTypes;
-using static MonitorSwitcher.WinApi.User32;
 using static MonitorSwitcher.WinApi.Dxva2;
+using static MonitorSwitcher.WinApi.User32;
 
 namespace MonitorSwitcher
 {
-    public class SafeMonitorHandle : IDisposable
+    public class SafePhysicalMonitor : IDisposable
     {
         private PHYSICAL_MONITOR _handle;
         private bool _isDisposed = false;
 
-        public SafeMonitorHandle(IntPtr hMon)
+        public SafePhysicalMonitor(IntPtr hMon)
         {
             _handle = GetMonitorHandle(hMon);
         }
@@ -24,15 +24,10 @@ namespace MonitorSwitcher
             }
         }
 
-        public IntPtr Monitor => _handle.hPhysicalMonitor;
+        public IntPtr Handle => _handle.hPhysicalMonitor;
+        public string Description => _handle.szPhysicalMonitorDescription;
 
-        public static explicit operator IntPtr(SafeMonitorHandle wrapper) => wrapper.Monitor;
-
-        private static PHYSICAL_MONITOR GetMonitorHandle(PointL point)
-        {
-            IntPtr hMon = MonitorFromPoint(point, 0);
-            return GetMonitorHandle(hMon);
-        }
+        public static implicit operator IntPtr(SafePhysicalMonitor monitor) => monitor.Handle;
 
         private static PHYSICAL_MONITOR GetMonitorHandle(IntPtr hMon)
         {
@@ -45,6 +40,12 @@ namespace MonitorSwitcher
             GetPhysicalMonitorsFromHMONITOR(hMon, 1, pPhysicalMonitorArray);
 
             return pPhysicalMonitorArray[0];
+        }
+
+        public static SafePhysicalMonitor FromPoint(PointL point)
+        {
+            var hMon = MonitorFromPoint(point, 0);
+            return new SafePhysicalMonitor(hMon);
         }
     }
 }

@@ -272,7 +272,7 @@ namespace MonitorSwitcher.WinApi
         {
             public LUID adapterId;
             public uint id;
-            public uint modeInfoIdx;
+            public int modeInfoIdx;
 
             public DisplayConfigSourceStatus statusFlags;
         }
@@ -282,7 +282,7 @@ namespace MonitorSwitcher.WinApi
         {
             public LUID adapterId;
             public uint id;
-            public uint modeInfoIdx;
+            public int modeInfoIdx;
             public DisplayConfigVideoOutputTechnology outputTechnology;
             public DisplayConfigRotation rotation;
             public DisplayConfigScaling scaling;
