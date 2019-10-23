@@ -1,18 +1,17 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
-using System.ComponentModel;
-using System.Xml.Serialization;
+using System.Text;
+using System.Threading.Tasks;
 
-namespace MonitorSwitcher
+namespace MonitorSwitcher.WinApi
 {
-    /// <summary>
-    /// This class takes care of wrapping "Connecting and Configuring Displays(CCD) Win32 API"
-    /// Original author Erti-Chris Eelmaa || easter199 at hotmail dot com
-    /// Modifications made by Martin Krämer || martinkraemer84 at gmail dot com
-    /// </summary>
-    public class CCDWrapper
+    public class DataTypes
     {
         public const int ERROR_SUCCESS = 0;
+        public const int CURRENT_SETTINGS_MODE = -1;
+
 
         [StructLayout(LayoutKind.Sequential)]
         public struct LUID
@@ -43,8 +42,6 @@ namespace MonitorSwitcher
             Internal = 0x80000000,
             ForceUint32 = 0xFFFFFFFF
         }
-
-        #region SdcFlags enum
 
         [Flags]
         public enum SdcFlags : uint
@@ -89,11 +86,11 @@ namespace MonitorSwitcher
         {
             Zero = 0x0,
 
-            InUse                         = 0x00000001,
-            FORCIBLE                       = 0x00000002,
-            ForcedAvailabilityBoot       = 0x00000004,
-            ForcedAvailabilityPath       = 0x00000008,
-            ForcedAvailabilitySystem     = 0x00000010,
+            InUse = 0x00000001,
+            FORCIBLE = 0x00000002,
+            ForcedAvailabilityBoot = 0x00000004,
+            ForcedAvailabilityPath = 0x00000008,
+            ForcedAvailabilitySystem = 0x00000010,
         }
 
         [Flags]
@@ -124,7 +121,7 @@ namespace MonitorSwitcher
         [Flags]
         public enum DisplayConfigScaling : uint
         {
-            Zero = 0x0, 
+            Zero = 0x0,
 
             Identity = 1,
             Centered = 2,
@@ -286,7 +283,7 @@ namespace MonitorSwitcher
             public LUID adapterId;
             public uint id;
             public uint modeInfoIdx;
-            public DisplayConfigVideoOutputTechnology outputTechnology; 
+            public DisplayConfigVideoOutputTechnology outputTechnology;
             public DisplayConfigRotation rotation;
             public DisplayConfigScaling scaling;
             public DisplayConfigRational refreshRate;
@@ -318,31 +315,6 @@ namespace MonitorSwitcher
             ForceUint32 = 0xFFFFFFFF
         }
 
-
-        #endregion
-
-        [DllImport("User32.dll")]
-        public static extern int SetDisplayConfig(
-            uint numPathArrayElements,
-            [In] DisplayConfigPathInfo[] pathArray,
-            uint numModeInfoArrayElements,
-            [In] DisplayConfigModeInfo[] modeInfoArray,
-            SdcFlags flags
-        );
-
-        [DllImport("User32.dll")]
-        public static extern int QueryDisplayConfig(
-            QueryDisplayFlags flags,
-            ref uint numPathArrayElements,
-            [Out] DisplayConfigPathInfo[] pathInfoArray,
-            ref uint modeInfoArrayElements,
-            [Out] DisplayConfigModeInfo[] modeInfoArray,
-            IntPtr z
-        );
-
-        [DllImport("User32.dll")]
-        public static extern int GetDisplayConfigBufferSizes(QueryDisplayFlags flags, out uint numPathArrayElements, out uint numModeInfoArrayElements);
-
         public enum DisplayConfigDeviceInfoType : uint
         {
             GetSourceName = 1,
@@ -372,10 +344,6 @@ namespace MonitorSwitcher
         /// <summary>
         /// Just an contract.
         /// </summary>
-        public interface IDisplayConfigInfo
-        {
-        }
-
         [StructLayout(LayoutKind.Sequential)]
         public struct DisplayConfigTargetDeviceNameFlags
         {
@@ -418,7 +386,7 @@ namespace MonitorSwitcher
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        public struct DisplayConfigSourceDeviceName : IDisplayConfigInfo
+        public struct DisplayConfigSourceDeviceName 
         {
             private const int Cchdevicename = 32;
 
@@ -427,169 +395,23 @@ namespace MonitorSwitcher
             public string viewGdiDeviceName;
         }
 
-        /*[DllImport("User32.dll")]
-        private static extern StatusCode DisplayConfigGetDeviceInfo(IntPtr requestPacket);
-        public static StatusCode DisplayConfigGetDeviceInfo<T>(ref T displayConfig) where T : IDisplayConfigInfo
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        public struct PHYSICAL_MONITOR
         {
-            return MarshalStructureAndCall(ref displayConfig, DisplayConfigGetDeviceInfo);
-        }*/
+            public IntPtr hPhysicalMonitor;
 
-        [DllImport("user32.dll")]
-        public static extern int DisplayConfigGetDeviceInfo(ref DisplayConfigTargetDeviceName deviceName);
-
-        [DllImport("user32.dll")]
-        public static extern int DisplayConfigGetDeviceInfo(ref DisplayConfigTargetPreferredMode deviceName);
-
-        public static string MonitorFriendlyName(LUID adapterId, uint targetId)
-        {
-            var deviceName = new DisplayConfigTargetDeviceName
-            {
-                header =
-                {
-                    size = (uint)Marshal.SizeOf(typeof (DisplayConfigTargetDeviceName)),
-                    adapterId = adapterId,
-                    id = targetId,
-                    type = DisplayConfigDeviceInfoType.GetTargetName
-                }
-            };
-            var error = DisplayConfigGetDeviceInfo(ref deviceName);
-            if (error != ERROR_SUCCESS)
-                throw new Win32Exception(error);
-            return deviceName.monitorFriendlyDeviceName;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+            public string szPhysicalMonitorDescription;
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        [Serializable]
-        public struct MonitorAdditionalInfo
+        public struct Rect
         {
-            //public string monitorDevicePath { get; set; }
-            //public string monitorFriendlyDevice { get; set; }
-            public ushort manufactureId { get; set; }
-            public ushort productCodeId { get; set; }
-            public Boolean valid { get; set; }
-
-
-            [XmlElement(ElementName = "monitorDevicePath")]
-            public String monitorDevicePath64
-            {
-                get
-                {
-                    string outValue = monitorDevicePath;
-                    if (outValue == null)
-                    {
-                        outValue = "";
-                    }
-                    return Convert.ToBase64String(System.Text.Encoding.UTF32.GetBytes(outValue));
-                }
-                set
-                {
-                    if (value == null)
-                    {
-                        monitorDevicePath = null;
-                        return;
-                    }
-
-                    monitorDevicePath = System.Text.Encoding.UTF32.GetString(Convert.FromBase64String(value));
-                }
-            }
-
-            [XmlIgnore]
-            public String monitorDevicePath;
-
-            [XmlElement(ElementName = "monitorFriendlyDevice")]
-            public String monitorFriendlyDevice64
-            {
-                get
-                {
-                    string outValue = monitorFriendlyDevice;
-                    if (outValue == null)
-                    {
-                        outValue = "";
-                    }
-                    return Convert.ToBase64String(System.Text.Encoding.UTF32.GetBytes(outValue));
-                }
-                set
-                {
-                    if (value == null)
-                    {
-                        monitorFriendlyDevice = null;
-                        return;
-                    }
-
-                    monitorFriendlyDevice = System.Text.Encoding.UTF32.GetString(Convert.FromBase64String(value));
-                }
-            }
-
-            [XmlIgnore]
-            public String monitorFriendlyDevice;
+            public int left;
+            public int top;
+            public int right;
+            public int bottom;
         }
 
-        public static MonitorAdditionalInfo GetMonitorAdditionalInfo(LUID adapterId, uint targetId)
-        {
-            MonitorAdditionalInfo result = new MonitorAdditionalInfo();
-            var deviceName = new DisplayConfigTargetDeviceName
-            {
-                header =
-                {
-                    size = (uint)Marshal.SizeOf(typeof (DisplayConfigTargetDeviceName)),
-                    adapterId = adapterId,
-                    id = targetId,
-                    type = DisplayConfigDeviceInfoType.GetTargetName
-                }
-            };
-            var error = DisplayConfigGetDeviceInfo(ref deviceName);
-            if (error != ERROR_SUCCESS)
-                throw new Win32Exception(error);
-
-            result.valid = true;
-            result.manufactureId = deviceName.edidManufactureId;
-            result.productCodeId = deviceName.edidProductCodeId;
-            result.monitorDevicePath = deviceName.monitorDevicePath;
-            result.monitorFriendlyDevice = deviceName.monitorFriendlyDeviceName;
-
-            return result;
-        }
-
-        public static DisplayConfigTargetPreferredMode GetPreferredMode(LUID adapterId, uint targetId)
-        {
-            var preferredMode = new DisplayConfigTargetPreferredMode
-            {
-                header =
-                {
-                    size = (uint)Marshal.SizeOf(typeof (DisplayConfigTargetPreferredMode)),
-                    adapterId = adapterId,
-                    id = targetId,
-                    type = DisplayConfigDeviceInfoType.GetTargetPreferredMode
-                }
-            };
-            var error = DisplayConfigGetDeviceInfo(ref preferredMode);
-            if (error != ERROR_SUCCESS)
-                throw new Win32Exception(error);
-
-            return preferredMode;
-        }
-
-        /// <summary>
-        /// The idea of this method is to make sure we have type-safety, without any stupid overloads.
-        /// Without this, you would need to marshal yourself everything when using DisplayConfigGetDeviceInfo,
-        /// or SetDeviceInfo, without any type-safety. 
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="displayConfig"></param>
-        /// <param name="func"></param>
-        /// <returns></returns>
-        private static StatusCode MarshalStructureAndCall<T>(ref T displayConfig,
-            Func<IntPtr, StatusCode> func) where T : IDisplayConfigInfo
-        {
-            var ptr = Marshal.AllocHGlobal(Marshal.SizeOf(displayConfig));
-            Marshal.StructureToPtr(displayConfig, ptr, false);
-
-            var returnValue = func(ptr);
-
-            displayConfig = (T)Marshal.PtrToStructure(ptr, displayConfig.GetType());
-
-            Marshal.FreeHGlobal(ptr);
-            return returnValue;
-        }
     }
 }

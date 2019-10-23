@@ -1,8 +1,7 @@
 ﻿using System;
-using static MonitorSwitcher.NativeStructures;
-using static MonitorSwitcher.NativeMethods;
-using System.Runtime.InteropServices;
-using static MonitorSwitcher.CCDWrapper;
+using static MonitorSwitcher.WinApi.DataTypes;
+using static MonitorSwitcher.WinApi.User32;
+using static MonitorSwitcher.WinApi.Dxva2;
 
 namespace MonitorSwitcher
 {

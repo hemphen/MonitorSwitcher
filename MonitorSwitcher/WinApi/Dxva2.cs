@@ -1,80 +1,39 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using static MonitorSwitcher.NativeStructures;
-using static MonitorSwitcher.CCDWrapper;
+using System.Threading.Tasks;
+using static MonitorSwitcher.WinApi.DataTypes;
 
-namespace MonitorSwitcher
+namespace MonitorSwitcher.WinApi
 {
-    public class NativeMethods
+    public static class Dxva2
     {
-        public const int CURRENT_SETTINGS_MODE = -1;
-
-        [DllImport("user32.dll")]
-        public static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip,
-            MonitorEnumDelegate lpfnEnum, IntPtr dwData);
-
-        public delegate bool MonitorEnumDelegate(IntPtr hMonitor, IntPtr hdcMonitor, ref Rect lprcMonitor, IntPtr dwData);
-
-        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
-        public static extern IntPtr MonitorFromWindow(
-            [In] IntPtr hwnd, uint dwFlags);
-        
-        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
-        public static extern IntPtr MonitorFromPoint(
-            [In] PointL pt, uint dwFlags);
-
-        [DllImport("dxva2.dll", ExactSpelling = true, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool GetNumberOfPhysicalMonitorsFromHMONITOR(IntPtr hMonitor, ref uint pdwNumberOfPhysicalMonitors);
-
         [DllImport("dxva2.dll", ExactSpelling = true, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool GetPhysicalMonitorsFromHMONITOR(
             IntPtr hMonitor,
             uint dwPhysicalMonitorArraySize,
-            [Out] NativeStructures.PHYSICAL_MONITOR[] pPhysicalMonitorArray);
+            [Out] PHYSICAL_MONITOR[] pPhysicalMonitorArray);
 
         [DllImport("dxva2.dll", ExactSpelling = true, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool DestroyPhysicalMonitors(
-            uint dwPhysicalMonitorArraySize, [Out] NativeStructures.PHYSICAL_MONITOR[] pPhysicalMonitorArray);
+            uint dwPhysicalMonitorArraySize, [Out] PHYSICAL_MONITOR[] pPhysicalMonitorArray);
 
         [DllImport("dxva2.dll", ExactSpelling = true, SetLastError = true)]
         public static extern void DestroyPhysicalMonitor(IntPtr hMonitor);
-
-        [DllImport("gdi32.dll", ExactSpelling = true, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool DDCCIGetCapabilitiesStringLength(
-            [In] IntPtr hMonitor, ref uint pdwLength);
-
-        [DllImport("gdi32.dll", ExactSpelling = true, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool DDCCIGetCapabilitiesString(
-            [In] IntPtr hMonitor, StringBuilder pszString, uint dwLength);
-
-
-        [DllImport("gdi32.dll", ExactSpelling = true, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool DDCCIGetVCPFeature(
-            [In] IntPtr hMonitor, [In] uint dwVCPCode, uint pvct, ref uint pdwCurrentValue, ref uint pdwMaximumValue);
 
         [DllImport("dxva2.dll", ExactSpelling = true, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool GetVCPFeatureAndVCPFeatureReply(
             [In] IntPtr hMonitor, [In] uint dwVCPCode, uint pvct, ref uint pdwCurrentValue, ref uint pdwMaximumValue);
 
-
         [DllImport("dxva2.dll", ExactSpelling = true, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SetVCPFeature(
             [In] IntPtr hMonitor, uint dwVCPCode, uint dwNewValue);
-        #region unused stuff
-#if UNUSED
-        public delegate bool MonitorEnumDelegate(IntPtr hMonitor, IntPtr hdcMonitor, ref NativeStructures.Rect lprcMonitor, IntPtr dwData);
-
-        [DllImport("user32.dll")]
-        public static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumDelegate lpfnEnum, IntPtr dwData);
 
         [DllImport("dxva2.dll", ExactSpelling = true, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -95,7 +54,9 @@ namespace MonitorSwitcher
         [DllImport("dxva2.dll", ExactSpelling = true, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SetMonitorBrightness(IntPtr hMonitor, uint dwNewBrightness);
-#endif
-        #endregion
+
+        [DllImport("dxva2.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetNumberOfPhysicalMonitorsFromHMONITOR(IntPtr hMonitor, ref uint pdwNumberOfPhysicalMonitors);
     }
 }
