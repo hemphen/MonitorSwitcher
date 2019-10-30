@@ -7,11 +7,10 @@ using System.Threading.Tasks;
 
 namespace MonitorSwitcher.WinApi
 {
-    public class DataTypes
+    public static class DataTypes
     {
         public const int ERROR_SUCCESS = 0;
         public const int CURRENT_SETTINGS_MODE = -1;
-
 
         [StructLayout(LayoutKind.Sequential)]
         public struct LUID

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "MonitorSwitcher": {
+      "commandName": "Project",
+      "commandLineArgs": "modify --disable 0,0"
+    }
+  }
+}
